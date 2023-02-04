@@ -9,6 +9,8 @@
     totalReagentUnits: 3
   - type: InputMover
   - type: MobMover
+  - type: HTN
+    rootTask: SimpleHostileCompound
   - type: Faction
     factions:
     - SimpleHostile
