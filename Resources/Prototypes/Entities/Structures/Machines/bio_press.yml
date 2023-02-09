@@ -1,0 +1,47 @@
+- type: entity
+  parent: [ BaseMachinePowered, ConstructibleMachine ]
+  id: BioPress
+  name: Bio Press
+  description: A bioprocessing unit that will render any and all biological entities in to their base chemical elements.
+  components:
+  - type: Icon
+    sprite: Structures/Machines/biopress.rsi
+    state: icon
+  - type: Sprite
+    netsync: false
+    sprite: Structures/Machines/biopress.rsi
+    layers:
+    - state: base
+    - state: closed
+      map: ["enum.StorageVisualLayers.Door"]
+  - type: Appearance
+    visuals:
+    - type: StorageVisualizer
+      state_open: open
+      state_closed: closed
+  - type: ActivatableUI
+    key: enum.BiopressUiKey.Key
+  - type: ActivatableUIRequiresPower
+  - type: UserInterface
+    interfaces:
+    - key: enum.BiopressUiKey.Key
+      type: BiopressBoundUserInterface
+  - type: EntityStorage
+    capacity: 500
+  - type: ApcPowerReceiver
+    powerLoad: 500
+  - type: PlaceableSurface
+    isPlaceable: false
+  - type: ItemSlots
+    slots:
+      beakerSlot:
+        whitelist:
+          components:
+          - FitsInDispenser
+          tags:
+          - Bottle
+  - type: ContainerContainer
+    containers:
+      beakerSlot: !type:ContainerSlot
+      machine_board: !type:Container
+      machine_parts: !type:Container
