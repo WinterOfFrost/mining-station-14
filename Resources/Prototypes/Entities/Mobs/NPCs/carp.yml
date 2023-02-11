@@ -35,9 +35,9 @@
             radius: 0.40
           density: 80
           mask:
-            - MobMask
+            - FlyingMobMask
           layer:
-            - MobLayer
+            - FlyingMobLayer
     - type: MobState
     - type: MobThresholds
       thresholds:
