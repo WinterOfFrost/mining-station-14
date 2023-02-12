@@ -149,7 +149,7 @@ namespace Content.Shared.Chemistry
         public readonly FixedPoint2? BufferCurrentVolume;
 
         public BiopressBoundUserInterfaceState(
-            BiopressMode mode, BiopressContainerInfo? inputContainerInfo, BiopressContainerInfo? outputContainerInfo,
+            BiopressMode mode, BiopressContainerInfo? outputContainerInfo,
             IReadOnlyList<Solution.ReagentQuantity> bufferReagents, FixedPoint2 bufferCurrentVolume)
         {
             OutputContainerInfo = outputContainerInfo;
