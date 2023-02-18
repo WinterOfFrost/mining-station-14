@@ -28,10 +28,18 @@
       type: BiopressBoundUserInterface
   - type: EntityStorage
     capacity: 500
+    openSound: /Audio/Machines/airlock_open.ogg
   - type: ApcPowerReceiver
     powerLoad: 500
   - type: PlaceableSurface
     isPlaceable: false
+  - type: Biopress
+  - type: AmbientSound
+    enabled: false
+    volume: -15
+    range: 5
+    sound:
+      path: /Audio/Ambience/Objects/reclaimer_ambience.ogg
   - type: ItemSlots
     slots:
       beakerSlot:
@@ -45,3 +53,6 @@
       beakerSlot: !type:ContainerSlot
       machine_board: !type:Container
       machine_parts: !type:Container
+  - type: SolutionContainerManager
+    solutions:
+      buffer: {}

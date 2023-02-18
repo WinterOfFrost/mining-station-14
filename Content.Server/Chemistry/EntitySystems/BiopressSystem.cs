@@ -14,6 +14,7 @@ using Content.Shared.Chemistry.Reaction;
 using Content.Shared.FixedPoint;
 using JetBrains.Annotations;
 using Robust.Server.GameObjects;
+using Content.Shared.Audio;
 using Robust.Shared.Audio;
 using Robust.Shared.Containers;
 using Robust.Shared.Player;
@@ -21,6 +22,7 @@ using Robust.Shared.Utility;
 using Content.Server.Power.Components;
 using Content.Server.Power.EntitySystems;
 using Robust.Shared.Prototypes;
+using Content.Shared.Jittering;
 
 namespace Content.Server.Chemistry.EntitySystems
 {
@@ -34,19 +36,100 @@ namespace Content.Server.Chemistry.EntitySystems
     {
         [Dependency] private readonly PopupSystem _popupSystem = default!;
         [Dependency] private readonly AudioSystem _audioSystem = default!;
+        [Dependency] private readonly SharedAudioSystem _sharedAudioSystem = default!;
+        [Dependency] private readonly SharedAmbientSoundSystem _ambientSoundSystem = default!;
         [Dependency] private readonly SolutionContainerSystem _solutionContainerSystem = default!;
         [Dependency] private readonly ItemSlotsSystem _itemSlotsSystem = default!;
         [Dependency] private readonly UserInterfaceSystem _userInterfaceSystem = default!;
         [Dependency] private readonly StorageSystem _storageSystem = default!;
         [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
         [Dependency] private readonly IGamePrototypeLoadManager _gamePrototypeLoadManager = default!;
+        [Dependency] private readonly SharedJitteringSystem _jitteringSystem = default!;
+        [Dependency] private readonly EntityStorageSystem _entityStorageSystem = default!;
 
         private Queue<BiopressComponent> _uiUpdateQueue = new();
+        private Queue<EntityUid> _activeQueue = new();
+        private Queue<EntityUid> _checkQueue = new();
 
         /// <summary>
         ///     A cache of all existant chemical reactions indexed by their resulting reagent.
         /// </summary>
         private IDictionary<string, List<ReactionPrototype>> _reactions = default!;
+
+        public override void Update(float frameTime)
+        {
+
+            base.Update(frameTime);
+
+            foreach (var uid in _activeQueue)
+            {
+                if (!TryComp<BiopressComponent>(uid, out var biopress))
+                    continue;
+
+                biopress.ProcessingTimer += frameTime;
+
+                if (biopress.Active && biopress.ProcessingTimer >= biopress.IntervalTime)
+                {
+                    //check current stage, run appropriate function
+                    switch (biopress.Stage)
+                    {
+                        case BiopressStage.Initial:
+                            {
+                                HandleSmallMatter(uid, biopress);
+                                break;
+                            }
+                        case BiopressStage.SmallMatter:
+                            {
+                                var largeMatter = CheckLargeMatter(uid, biopress);
+
+                                if (largeMatter)
+                                    HandleLargeMatter(uid, biopress);
+                                else
+                                    FinalStage(uid, biopress);
+
+                                break;
+                            }
+                        case BiopressStage.LargeMatter:
+                            {
+                                var largeMatter = CheckLargeMatter(uid, biopress);
+
+                                if (largeMatter)
+                                    HandleLargeMatter(uid, biopress);
+                                else
+                                    HandleSmallMatter(uid, biopress);
+
+                                break;
+                            }
+                        case BiopressStage.Final:
+                            {
+                                biopress.Active = false;
+                                break;
+                            }
+                    }
+                }
+
+                _checkQueue.Enqueue(uid);
+            }
+
+            _activeQueue.Clear();
+
+            foreach (var uid in _checkQueue)
+            {
+                if (!TryComp<BiopressComponent>(uid, out var biopress))
+                {
+                    AfterShutdown(uid);
+                    continue;
+                }
+
+                if (biopress.Active)
+                    _activeQueue.Enqueue(uid);
+                else
+                    AfterShutdown(uid);
+            }
+
+            _checkQueue.Clear();
+
+        }
 
         public override void Initialize()
         {
@@ -72,6 +155,8 @@ namespace Content.Server.Chemistry.EntitySystems
 
             SubscribeLocalEvent<BiopressComponent, BiopressActivateButtonMessage>(OnActivateButtonMessage);
             SubscribeLocalEvent<BiopressComponent, BiopressStopButtonMessage>(OnStopButtonMessage);
+
+            SubscribeLocalEvent<BiopressComponent, BiopressStoreToggleButtonMessage>(OnStoreToggleButtonMessage);
 
         }
 
@@ -123,14 +208,52 @@ namespace Content.Server.Chemistry.EntitySystems
             }
         }
 
+        /// <summary>
+        ///     Applies Slash damage to all damageable entities inside hopper, then
+        ///     Remove all non-living, non-gibbable entities and generate reagents for buffer
+        /// </summary>
+        private void HandleSmallMatter(EntityUid uid, BiopressComponent biopress) {
+            biopress.ProcessingTimer = 0;
+            biopress.Stage = BiopressStage.SmallMatter;
+            SoundSystem.Play(biopress.GrindSound.GetSound(), Filter.Pvs(uid), uid, AudioParams.Default);
+        }
+
+        /// <summary>
+        ///     Applies Blunt damage to all damageable entities inside hopper
+        /// </summary>    
+        private void HandleLargeMatter(EntityUid uid, BiopressComponent biopress) {
+            biopress.ProcessingTimer = 0;
+            biopress.Stage = BiopressStage.LargeMatter;
+            SoundSystem.Play(biopress.HydraulicSound.GetSound(), Filter.Pvs(uid), uid, AudioParams.Default);
+        }
+
+        /// <summary>
+        ///     Check for gibbable entities in hopper
+        /// </summary> 
+        private bool CheckLargeMatter(EntityUid uid, BiopressComponent biopress) {
+
+            return false;
+        }
+
+        /// <summary>
+        ///     Remove remaining entities, add n ashes to hopper for each entity
+        /// </summary> 
+        private void FinalStage(EntityUid uid, BiopressComponent biopress) {
+            biopress.ProcessingTimer = 0;
+            biopress.Stage = BiopressStage.Final;
+            SoundSystem.Play(biopress.IncinerateSound.GetSound(), Filter.Pvs(uid), uid, AudioParams.Default);
+        }
+
         private void OnPowerChange(EntityUid uid, BiopressComponent component, ref PowerChangedEvent args)
         {
             EnqueueUiUpdate(component);
+            if (!this.IsPowered(component.Owner, EntityManager) && component.Active)
+                component.Active = false;
         }
 
         private void OnEntRemoveAttempt(EntityUid uid, BiopressComponent component, ContainerIsRemovingAttemptEvent args)
         {
-            if (component.Busy)
+            if (component.Active)
                 args.Cancel();
         }
 
@@ -141,7 +264,7 @@ namespace Content.Server.Chemistry.EntitySystems
 
         private void UpdateUiState(BiopressComponent Biopress)
         {
-            if (Biopress.Busy)
+            if (Biopress.Active)
                 return;
 
             if (!_solutionContainerSystem.TryGetSolution(Biopress.Owner, SharedBiopress.BufferSolutionName, out var bufferSolution))
@@ -175,6 +298,23 @@ namespace Content.Server.Chemistry.EntitySystems
             ClickSound(Biopress);
         }
 
+        private void OnStoreToggleButtonMessage(EntityUid uid, BiopressComponent Biopress, BiopressStoreToggleButtonMessage message)
+        {
+            if (!TryComp<EntityStorageComponent>(uid, out var storage))
+                return;
+
+            if (storage.Open)
+                _entityStorageSystem.CloseStorage(uid, storage);
+            else {
+                _entityStorageSystem.OpenStorage(uid, storage);
+                if (storage.IsWeldedShut && storage.Open)
+                    storage.IsWeldedShut = false;
+
+                if (storage.Open && Biopress.Active)
+                    Biopress.Active = false;
+            }
+        }
+
         private void OnReagentButtonMessage(EntityUid uid, BiopressComponent Biopress, BiopressReagentAmountButtonMessage message)
         {
             // Ensure the amount corresponds to one of the reagent amount buttons.
@@ -197,20 +337,35 @@ namespace Content.Server.Chemistry.EntitySystems
             ClickSound(Biopress);
         }
 
+        private void AfterShutdown(EntityUid uid)
+        {
+            RemComp<JitteringComponent>(uid);
+            _ambientSoundSystem.SetAmbience(uid, false);
+        }
+
         private void OnActivateButtonMessage(EntityUid uid, BiopressComponent component, BiopressActivateButtonMessage message)
         {
+
             if (!this.IsPowered(component.Owner, EntityManager))
+                return;
+            
+
+            if (!this.IsPowered(component.Owner, EntityManager) ||
+                component.Active)
                 return;
 
             ClickSound(component);
+            component.Active = true;
+            component.ProcessingTimer = 0;
 
-            if (!this.IsPowered(component.Owner, EntityManager) ||
-                component.Busy)
-                return;
+            _jitteringSystem.AddJitter(uid, -95, 25);
+            _sharedAudioSystem.Play("/Audio/Machines/reclaimer_startup.ogg", Filter.Pvs(uid), uid);
+            _ambientSoundSystem.SetAmbience(uid, true);
 
-            component.Busy = true;
+            _activeQueue.Enqueue(uid);
 
-            component.Busy = false;
+            component.Stage = BiopressStage.Initial;
+
             UpdateUiState(component);
         }
 
@@ -219,12 +374,11 @@ namespace Content.Server.Chemistry.EntitySystems
             ClickSound(component);
 
             if (!this.IsPowered(component.Owner, EntityManager) ||
-                component.Busy)
+                !component.Active)
                 return;
 
-            component.Busy = true;
+            component.Active = false;
 
-            component.Busy = false;
             UpdateUiState(component);
         }
 

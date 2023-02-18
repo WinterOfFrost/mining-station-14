@@ -52,6 +52,9 @@ namespace Content.Client.Chemistry.UI
             _window.StopButton.OnPressed += _ => SendMessage(
                 new BiopressStopButtonMessage(true));
 
+            _window.StoreToggle.OnPressed += _ => SendMessage(
+                new BiopressStoreToggleButtonMessage(true));
+
             _window.OnBiopressReagentButtonPressed += (args, button) => SendMessage(new BiopressReagentAmountButtonMessage(button.Id, button.Amount, button.IsBuffer));
         }
 

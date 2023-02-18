@@ -67,10 +67,29 @@ namespace Content.Shared.Chemistry
         }
     }
 
+    [Serializable, NetSerializable]
+    public sealed class BiopressStoreToggleButtonMessage : BoundUserInterfaceMessage
+    {
+        public readonly bool Activated;
+
+        public BiopressStoreToggleButtonMessage(bool activated)
+        {
+            Activated = activated;
+        }
+    }
+
     public enum BiopressMode
     {
         Transfer,
         Discard,
+    }
+
+    public enum BiopressStage
+    {
+        Initial,
+        SmallMatter,
+        LargeMatter,
+        Final,
     }
 
     public enum BiopressReagentAmount
