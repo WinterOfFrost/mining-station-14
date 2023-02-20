@@ -138,7 +138,6 @@ namespace Content.Server.Chemistry.EntitySystems
             InitializeReactionCache();
 
             _prototypeManager.PrototypesReloaded += OnPrototypesReloaded;
-            _gamePrototypeLoadManager.GamePrototypeLoaded += InitializeReactionCache;
 
             SubscribeLocalEvent<BiopressComponent, ComponentStartup>((_, comp, _) => UpdateUiState(comp));
             SubscribeLocalEvent<BiopressComponent, SolutionChangedEvent>((_, comp, _) => UpdateUiState(comp));
@@ -278,7 +277,7 @@ namespace Content.Server.Chemistry.EntitySystems
             }*/
 
             var bufferReagents = bufferSolution.Contents;
-            var bufferCurrentVolume = bufferSolution.CurrentVolume;
+            var bufferCurrentVolume = bufferSolution.Volume;
 
             var state = new BiopressBoundUserInterfaceState(
                 Biopress.Mode, BuildContainerInfo(outputContainer),
@@ -359,7 +358,7 @@ namespace Content.Server.Chemistry.EntitySystems
             component.ProcessingTimer = 0;
 
             _jitteringSystem.AddJitter(uid, -95, 25);
-            _sharedAudioSystem.Play("/Audio/Machines/reclaimer_startup.ogg", Filter.Pvs(uid), uid);
+            _sharedAudioSystem.PlayPvs("/Audio/Machines/reclaimer_startup.ogg", uid);
             _ambientSoundSystem.SetAmbience(uid, true);
 
             _activeQueue.Enqueue(uid);
@@ -433,7 +432,7 @@ namespace Content.Server.Chemistry.EntitySystems
 
         private void ClickSound(BiopressComponent Biopress)
         {
-            _audioSystem.Play(Biopress.ClickSound, Filter.Pvs(Biopress.Owner), Biopress.Owner, AudioParams.Default.WithVolume(-2f));
+            _audioSystem.Play(Biopress.ClickSound, Filter.Pvs(Biopress.Owner), Biopress.Owner, false, AudioParams.Default.WithVolume(-2f));
         }
 
         private BiopressContainerInfo? BuildContainerInfo(EntityUid? container)
@@ -451,7 +450,7 @@ namespace Content.Server.Chemistry.EntitySystems
                 foreach (var solution in (solutions.Solutions)) //will only work on the first iter val
                 {
                     var reagents = solution.Value.Contents.Select(reagent => (reagent.ReagentId, reagent.Quantity)).ToList();
-                    return new BiopressContainerInfo(Name(container.Value), true, solution.Value.CurrentVolume, solution.Value.MaxVolume, reagents);
+                    return new BiopressContainerInfo(Name(container.Value), true, solution.Value.Volume, solution.Value.MaxVolume, reagents);
                 }
 
             return null;
