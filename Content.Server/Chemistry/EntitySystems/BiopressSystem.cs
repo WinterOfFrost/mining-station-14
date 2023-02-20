@@ -345,12 +345,12 @@ namespace Content.Server.Chemistry.EntitySystems
         private void OnActivateButtonMessage(EntityUid uid, BiopressComponent component, BiopressActivateButtonMessage message)
         {
 
-            if (!this.IsPowered(component.Owner, EntityManager))
+            if (!TryComp<EntityStorageComponent>(uid, out var storage))
                 return;
-            
 
             if (!this.IsPowered(component.Owner, EntityManager) ||
-                component.Active)
+                component.Active ||
+                storage.Open)
                 return;
 
             ClickSound(component);
