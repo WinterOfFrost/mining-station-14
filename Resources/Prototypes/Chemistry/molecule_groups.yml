@@ -1,0 +1,56 @@
+#reagents
+
+- type: moleculeGroup
+  id: Water
+  reagentProportions:
+    Hydrogen: 0.66
+    Oxygen: 0.33
+
+- type: moleculeGroup
+  id: Ethanol
+  reagentProportions:
+    Hydrogen: 0.66
+    Carbon: 0.22
+    Oxygen: 0.11
+
+- type: moleculeGroup
+  id: Sugar
+  reagentProportions:
+    Hydrogen: 0.5
+    Carbon: 0.25
+    Oxygen: 0.25
+
+- type: moleculeGroup
+  id: Nutriment
+  reagentProportions:
+    Hydrogen: 0.6
+    Carbon: 0.3
+    Oxygen: 0.1
+
+#groups
+
+- type: moleculeGroup
+  id: AlcoholicBeverage
+  reagentProportions:
+    Ethanol: 0.4
+    Sugar: 0.1
+    Water: 0.5
+
+- type: moleculeGroup
+  id: SoftBeverage
+  reagentProportions:
+    Sugar: 0.1
+    Water: 0.9
+
+- type: moleculeGroup
+  id: DairyBeverage
+  reagentProportions:
+    Nutriment: 0.1
+    Water: 0.9
+
+- type: moleculeGroup
+  id: Noodles
+  reagentProportions:
+    Nutriment: 0.4
+    Water: 0.4
+    TableSalt: 0.1
