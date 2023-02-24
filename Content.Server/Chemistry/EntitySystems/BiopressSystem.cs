@@ -90,12 +90,20 @@ namespace Content.Server.Chemistry.EntitySystems
                             }
                         case BiopressStage.SmallMatter:
                             {
-                                var largeMatter = CheckLargeMatter(uid, biopress);
+                                var smallMatter = CheckSmallMatter(uid, biopress); //and not so small... for now
 
-                                if (largeMatter)
-                                    HandleLargeMatter(uid, biopress);
-                                else
-                                    FinalStage(uid, biopress);
+                                if (!smallMatter)
+                                {
+                                    var largeMatter = CheckLargeMatter(uid, biopress);
+
+                                    if (largeMatter)
+                                        HandleLargeMatter(uid, biopress);
+                                    else
+                                        FinalStage(uid, biopress);
+                                } else
+                                {
+                                    HandleSmallMatter(uid, biopress);
+                                }
 
                                 break;
                             }
@@ -167,6 +175,8 @@ namespace Content.Server.Chemistry.EntitySystems
             SubscribeLocalEvent<BiopressComponent, BiopressStopButtonMessage>(OnStopButtonMessage);
 
             SubscribeLocalEvent<BiopressComponent, BiopressStoreToggleButtonMessage>(OnStoreToggleButtonMessage);
+
+            SubscribeLocalEvent<BiopressComponent, StorageBeforeOpenEvent>(OnStorageOpened);
 
         }
 
@@ -264,32 +274,49 @@ namespace Content.Server.Chemistry.EntitySystems
         ///     Get all entities in containers that are also in this container EXCEPT if the container is ALIVE
         ///     (or if live-able and does NOT have the BiopressHarvest component)    
         /// </summary>
-        private Tuple<List<EntityUid>, List<Solution.ReagentQuantity>> GetContainerEntitities(EntityUid uid)
+        private Tuple<List<EntityUid>, List<Solution.ReagentQuantity>, List<EntityUid>> GetContainerEntitities(EntityUid uid)
         {
             List<EntityUid> entityList = new List<EntityUid>();
             List<Solution.ReagentQuantity> reagentList = new List<Solution.ReagentQuantity>();
+            List<EntityUid> moveList = new List<EntityUid>();
 
             //first check if the container is capable of living (has the MobState component)
             if (TryComp(uid, out MobStateComponent? mobState))
             {
                 //then check if it is alive or not
                 if (mobState.CurrentState == MobState.Dead)
-                    return Tuple.Create(entityList, reagentList);
+                    return Tuple.Create(entityList, reagentList,moveList);
                 //if it can live but is dead, check if it has the BiopressHarvest component (if it does, continue)
                 else if (!TryComp(uid, out BiopressHarvestComponent? biopressHarvest))
-                    return Tuple.Create(entityList, reagentList);
+                    return Tuple.Create(entityList, reagentList, moveList);
             }
 
             //Check for entity storage
             if (TryComp(uid, out EntityStorageComponent? container))
             {
-                //iterate through container items
+                //relocate any living (or potentially living) entities out to the mainContainer
+                var containedEntities = new List<EntityUid>();
+                
                 foreach (var entityUid in container.Contents.ContainedEntities)
+                {
+                    if (TryComp(entityUid, out MobStateComponent? containedMob))
+                    {
+                        moveList.Add(entityUid);
+                    }
+                    else
+                    {
+                        containedEntities.Add(entityUid);
+                    }
+                }
+
+                //iterate through container items
+                foreach (var entityUid in containedEntities)
                 {
                     entityList.Add(entityUid);
                     var entityTuple = GetContainerEntitities(entityUid);
                     entityList.AddRange(entityTuple.Item1);
                     reagentList.AddRange(entityTuple.Item2);
+                    moveList.AddRange(entityTuple.Item3);
                 }
             }
 
@@ -298,13 +325,28 @@ namespace Content.Server.Chemistry.EntitySystems
             {
                 foreach (KeyValuePair<string, IContainer> cont in containers.Containers) //should be only one
                 {
-                    //iterate through container items
+                    var containedEntities = new List<EntityUid>();
+                    //relocate any living (or potentially living) entities out to the mainContainer
                     foreach (var entityUid in cont.Value.ContainedEntities)
+                    {
+                        if (TryComp(entityUid, out MobStateComponent? containedMob))
+                        {
+                            moveList.Add(entityUid);
+                        } else
+                        {
+                            containedEntities.Add(entityUid);
+                        }
+
+                    }
+
+                    //iterate through container items
+                    foreach (var entityUid in containedEntities)
                     {
                         entityList.Add(entityUid);
                         var entityTuple = GetContainerEntitities(entityUid);
                         entityList.AddRange(entityTuple.Item1);
                         reagentList.AddRange(entityTuple.Item2);
+                        moveList.AddRange(entityTuple.Item3);
                     }
                 }
             }
@@ -316,7 +358,7 @@ namespace Content.Server.Chemistry.EntitySystems
                     reagentList.AddRange(solution.Value.Contents);
             }
 
-            return Tuple.Create(entityList,reagentList);
+            return Tuple.Create(entityList,reagentList,moveList);
         }
 
         /// <summary>
@@ -330,16 +372,25 @@ namespace Content.Server.Chemistry.EntitySystems
 
             List<EntityUid> entityList = new List<EntityUid>();
             List<Solution.ReagentQuantity> reagentList = new List<Solution.ReagentQuantity>();
+            List<EntityUid> moveList = new List<EntityUid>();
+
             //Check for entity storage
             if (TryComp(uid, out EntityStorageComponent? container))
             {
                 //iterate through container items (using recursion to find contained containers)
-                foreach (var entityUid in container.Contents.ContainedEntities) {
+                var containedEntities = container.Contents.ContainedEntities;
+                foreach (var entityUid in containedEntities) {
                     entityList.Add(entityUid);
                     var entityTuple = GetContainerEntitities(entityUid);
                     entityList.AddRange(entityTuple.Item1);
                     reagentList.AddRange(entityTuple.Item2);
+                    moveList.AddRange(entityTuple.Item3);
                 }
+            }
+
+            foreach (var entityUid in moveList)
+            {
+               _entityStorageSystem.Insert(entityUid, uid);
             }
 
             //next, apply slash damage to all damageable entities
@@ -369,7 +420,6 @@ namespace Content.Server.Chemistry.EntitySystems
             //now we get all reagents and render them to their base elements (with another recursive function)
 
             //then we convert all entities with the biopressHarvest component in to their constituent reagents
-            //noted - living, gibbable entities may still be inside containers... either get them out or call it an exception...
 
             //TODO convert non-organics in to "assorted junk"
 
@@ -400,6 +450,28 @@ namespace Content.Server.Chemistry.EntitySystems
                     _damageableSystem.TryChangeDamage(entityUid, biopress.LargeDamage, ignoreResistances: false);
                 }
             }
+        }
+
+        /// <summary>
+        ///     Check for "non-gibbable" but living entities in hopper
+        /// </summary> 
+        private bool CheckSmallMatter(EntityUid uid, BiopressComponent biopress)
+        {
+
+            if (TryComp(uid, out EntityStorageComponent? container))
+            {
+                foreach (var entityUid in container.Contents.ContainedEntities)
+                {
+                    if (TryComp(entityUid, out MobStateComponent? mobState))
+                    {
+                        if (mobState.CurrentState != MobState.Dead && TryComp(entityUid, out BiopressHarvestComponent? biopressHarvest))
+                            return true;
+                    }
+
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -486,6 +558,12 @@ namespace Content.Server.Chemistry.EntitySystems
             ClickSound(Biopress);
         }
 
+        private void OnStorageOpened(EntityUid uid, BiopressComponent component, StorageBeforeOpenEvent args)
+        {
+            if (component.Active)
+                component.Active = false;
+        }
+
         private void OnStoreToggleButtonMessage(EntityUid uid, BiopressComponent Biopress, BiopressStoreToggleButtonMessage message)
         {
             if (!TryComp<EntityStorageComponent>(uid, out var storage))
@@ -493,14 +571,8 @@ namespace Content.Server.Chemistry.EntitySystems
 
             if (storage.Open)
                 _entityStorageSystem.CloseStorage(uid, storage);
-            else {
+            else 
                 _entityStorageSystem.OpenStorage(uid, storage);
-                if (storage.IsWeldedShut && storage.Open)
-                    storage.IsWeldedShut = false;
-
-                if (storage.Open && Biopress.Active)
-                    Biopress.Active = false;
-            }
         }
 
         private void OnReagentButtonMessage(EntityUid uid, BiopressComponent Biopress, BiopressReagentAmountButtonMessage message)
