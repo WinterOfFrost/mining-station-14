@@ -34,6 +34,12 @@
   - type: PlaceableSurface
     isPlaceable: false
   - type: Biopress
+    smallDamage:
+      types:
+        Slash: 25
+    largeDamage:
+      types:
+        Blunt: 100
   - type: AmbientSound
     enabled: false
     volume: -15

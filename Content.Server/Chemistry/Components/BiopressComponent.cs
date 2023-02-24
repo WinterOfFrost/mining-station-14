@@ -3,6 +3,7 @@ using Content.Shared.Chemistry;
 using Content.Shared.Containers.ItemSlots;
 using Robust.Shared.Audio;
 using Robust.Shared.Containers;
+using Content.Shared.Damage;
 
 namespace Content.Server.Chemistry.Components
 {
@@ -36,5 +37,13 @@ namespace Content.Server.Chemistry.Components
         /// </summary>
         [ViewVariables]
         public float ProcessingTimer = default;
+
+        [DataField("smallDamage", required: true)]
+        [ViewVariables(VVAccess.ReadWrite)]
+        public DamageSpecifier SmallDamage = default!;
+
+        [DataField("largeDamage", required: true)]
+        [ViewVariables(VVAccess.ReadWrite)]
+        public DamageSpecifier LargeDamage = default!;
     }
 }

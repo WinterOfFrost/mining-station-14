@@ -23,6 +23,11 @@ using Content.Server.Power.Components;
 using Content.Server.Power.EntitySystems;
 using Robust.Shared.Prototypes;
 using Content.Shared.Jittering;
+using Content.Shared.Mobs.Components;
+using Content.Shared.Mobs;
+using Content.Shared.Damage;
+using Content.Shared.Damage.Components;
+using Content.Server.Destructible;
 
 namespace Content.Server.Chemistry.EntitySystems
 {
@@ -46,6 +51,7 @@ namespace Content.Server.Chemistry.EntitySystems
         [Dependency] private readonly IGamePrototypeLoadManager _gamePrototypeLoadManager = default!;
         [Dependency] private readonly SharedJitteringSystem _jitteringSystem = default!;
         [Dependency] private readonly EntityStorageSystem _entityStorageSystem = default!;
+        [Dependency] private readonly DamageableSystem _damageableSystem = default!;
 
         private Queue<BiopressComponent> _uiUpdateQueue = new();
         private Queue<EntityUid> _activeQueue = new();
@@ -55,6 +61,10 @@ namespace Content.Server.Chemistry.EntitySystems
         ///     A cache of all existant chemical reactions indexed by their resulting reagent.
         /// </summary>
         private IDictionary<string, List<ReactionPrototype>> _reactions = default!;
+        /// <summary>
+        ///     A cache of all existant molecule groups for some compound reagents not produced by recipes.
+        /// </summary>
+        private IDictionary<string, List<MoleculeGroupPrototype>> _moleculeGroups = default!;
 
         public override void Update(float frameTime)
         {
@@ -137,7 +147,8 @@ namespace Content.Server.Chemistry.EntitySystems
 
             InitializeReactionCache();
 
-            _prototypeManager.PrototypesReloaded += OnPrototypesReloaded;
+            _prototypeManager.PrototypesReloaded += OnPrototypesReloadedReactions;
+            _prototypeManager.PrototypesReloaded += OnPrototypesReloadedMoleculeGroups;
 
             SubscribeLocalEvent<BiopressComponent, ComponentStartup>((_, comp, _) => UpdateUiState(comp));
             SubscribeLocalEvent<BiopressComponent, SolutionChangedEvent>((_, comp, _) => UpdateUiState(comp));
@@ -171,9 +182,17 @@ namespace Content.Server.Chemistry.EntitySystems
             {
                 CacheReaction(products);
             }
+
+            _moleculeGroups = new Dictionary<string, List<MoleculeGroupPrototype>>();
+
+            var moleculeGroups = _prototypeManager.EnumeratePrototypes<MoleculeGroupPrototype>();
+            foreach (var group in moleculeGroups)
+            {
+                CacheMoleculeGroup(group);
+            }
         }
 
-        private void OnPrototypesReloaded(PrototypesReloadedEventArgs eventArgs)
+        private void OnPrototypesReloadedReactions(PrototypesReloadedEventArgs eventArgs)
         {
             if (!eventArgs.ByType.TryGetValue(typeof(ReactionPrototype), out var set))
                 return;
@@ -187,7 +206,26 @@ namespace Content.Server.Chemistry.EntitySystems
 
             foreach (var prototype in set.Modified.Values)
             {
-                CacheReaction((ReactionPrototype)prototype);
+                CacheReaction((ReactionPrototype) prototype);
+            }
+        }
+
+        private void OnPrototypesReloadedMoleculeGroups(PrototypesReloadedEventArgs eventArgs)
+        {
+
+            if (!eventArgs.ByType.TryGetValue(typeof(MoleculeGroupPrototype), out var set))
+                return;
+
+            foreach (var (reagentProportions, cache) in _moleculeGroups)
+            {
+                cache.RemoveAll((moleculeGroup) => set.Modified.ContainsKey(moleculeGroup.ID));
+                if (cache.Count == 0)
+                    _moleculeGroups.Remove(reagentProportions);
+            }
+
+            foreach (var prototype in set.Modified.Values)
+            {
+                CacheMoleculeGroup((MoleculeGroupPrototype) prototype);
             }
         }
 
@@ -207,6 +245,80 @@ namespace Content.Server.Chemistry.EntitySystems
             }
         }
 
+        private void CacheMoleculeGroup(MoleculeGroupPrototype moleculeGroup)
+        {
+            var groupId = moleculeGroup.ID;
+
+            if (!_moleculeGroups.TryGetValue(groupId, out var cache))
+            {
+                cache = new List<MoleculeGroupPrototype>();
+                _moleculeGroups.Add(groupId, cache);
+            }
+
+            cache.Add(moleculeGroup);
+
+        }
+
+        /// <summary>
+        ///     Get all entities in container
+        ///     Get all entities in containers that are also in this container EXCEPT if the container is ALIVE
+        ///     (or if live-able and does NOT have the BiopressHarvest component)    
+        /// </summary>
+        private Tuple<List<EntityUid>, List<Solution.ReagentQuantity>> GetContainerEntitities(EntityUid uid)
+        {
+            List<EntityUid> entityList = new List<EntityUid>();
+            List<Solution.ReagentQuantity> reagentList = new List<Solution.ReagentQuantity>();
+
+            //first check if the container is capable of living (has the MobState component)
+            if (TryComp(uid, out MobStateComponent? mobState))
+            {
+                //then check if it is alive or not
+                if (mobState.CurrentState == MobState.Dead)
+                    return Tuple.Create(entityList, reagentList);
+                //if it can live but is dead, check if it has the BiopressHarvest component (if it does, continue)
+                else if (!TryComp(uid, out BiopressHarvestComponent? biopressHarvest))
+                    return Tuple.Create(entityList, reagentList);
+            }
+
+            //Check for entity storage
+            if (TryComp(uid, out EntityStorageComponent? container))
+            {
+                //iterate through container items
+                foreach (var entityUid in container.Contents.ContainedEntities)
+                {
+                    entityList.Add(entityUid);
+                    var entityTuple = GetContainerEntitities(entityUid);
+                    entityList.AddRange(entityTuple.Item1);
+                    reagentList.AddRange(entityTuple.Item2);
+                }
+            }
+
+            //Check for container manager
+            if (TryComp(uid, out ContainerManagerComponent? containers))
+            {
+                foreach (KeyValuePair<string, IContainer> cont in containers.Containers) //should be only one
+                {
+                    //iterate through container items
+                    foreach (var entityUid in cont.Value.ContainedEntities)
+                    {
+                        entityList.Add(entityUid);
+                        var entityTuple = GetContainerEntitities(entityUid);
+                        entityList.AddRange(entityTuple.Item1);
+                        reagentList.AddRange(entityTuple.Item2);
+                    }
+                }
+            }
+
+            //check for solution container manager
+            if (TryComp<SolutionContainerManagerComponent>(uid, out var solutions))
+            {
+                foreach (var solution in (solutions.Solutions))
+                    reagentList.AddRange(solution.Value.Contents);
+            }
+
+            return Tuple.Create(entityList,reagentList);
+        }
+
         /// <summary>
         ///     Applies Slash damage to all damageable entities inside hopper, then
         ///     Remove all non-living, non-gibbable entities and generate reagents for buffer
@@ -215,6 +327,54 @@ namespace Content.Server.Chemistry.EntitySystems
             biopress.ProcessingTimer = 0;
             biopress.Stage = BiopressStage.SmallMatter;
             SoundSystem.Play(biopress.GrindSound.GetSound(), Filter.Pvs(uid), uid, AudioParams.Default);
+
+            List<EntityUid> entityList = new List<EntityUid>();
+            List<Solution.ReagentQuantity> reagentList = new List<Solution.ReagentQuantity>();
+            //Check for entity storage
+            if (TryComp(uid, out EntityStorageComponent? container))
+            {
+                //iterate through container items (using recursion to find contained containers)
+                foreach (var entityUid in container.Contents.ContainedEntities) {
+                    entityList.Add(entityUid);
+                    var entityTuple = GetContainerEntitities(entityUid);
+                    entityList.AddRange(entityTuple.Item1);
+                    reagentList.AddRange(entityTuple.Item2);
+                }
+            }
+
+            //next, apply slash damage to all damageable entities
+            //reassess their containers if needed
+            List<EntityUid> killed = new List<EntityUid>();
+
+            foreach (var entityUid in entityList)
+            {
+                if (TryComp(entityUid, out DamageableComponent? damageable))
+                {
+                    _damageableSystem.TryChangeDamage(entityUid, biopress.SmallDamage, ignoreResistances: false);
+                    if (TryComp(entityUid, out MobStateComponent? mobState))
+                    {
+                        if (mobState.CurrentState == MobState.Dead)
+                            killed.Add(entityUid);
+                    }
+                }
+            }
+
+            foreach (var entityUid in killed)
+            {
+                var entityTuple = GetContainerEntitities(entityUid);
+                entityList.AddRange(entityTuple.Item1);
+                reagentList.AddRange(entityTuple.Item2);
+            }
+
+            //now we get all reagents and render them to their base elements (with another recursive function)
+
+            //then we convert all entities with the biopressHarvest component in to their constituent reagents
+            //noted - living, gibbable entities may still be inside containers... either get them out or call it an exception...
+
+            //TODO convert non-organics in to "assorted junk"
+
+            //those reagents are added to the buffer
+
         }
 
         /// <summary>
@@ -224,12 +384,41 @@ namespace Content.Server.Chemistry.EntitySystems
             biopress.ProcessingTimer = 0;
             biopress.Stage = BiopressStage.LargeMatter;
             SoundSystem.Play(biopress.HydraulicSound.GetSound(), Filter.Pvs(uid), uid, AudioParams.Default);
+
+            if (TryComp(uid, out EntityStorageComponent? container))
+            {
+                List<EntityUid> entityList = new List<EntityUid>();
+                foreach (var entityUid in container.Contents.ContainedEntities)
+                {
+                    if (TryComp(entityUid, out DamageableComponent? mobState))
+                    {
+                        entityList.Add(entityUid);
+                    }
+                }
+                foreach (var entityUid in entityList)
+                {
+                    _damageableSystem.TryChangeDamage(entityUid, biopress.LargeDamage, ignoreResistances: false);
+                }
+            }
         }
 
         /// <summary>
         ///     Check for gibbable entities in hopper
         /// </summary> 
         private bool CheckLargeMatter(EntityUid uid, BiopressComponent biopress) {
+
+            if (TryComp(uid, out EntityStorageComponent? container))
+            {
+                foreach (var entityUid in container.Contents.ContainedEntities)
+                {
+                    if (TryComp(entityUid, out MobStateComponent? mobState))
+                    {
+                        if (TryComp(entityUid, out DestructibleComponent? destructible) && !TryComp(entityUid, out BiopressHarvestComponent? biopressHarvest))
+                            return true;
+                    }
+
+                }
+            }
 
             return false;
         }

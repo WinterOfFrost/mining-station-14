@@ -1,4 +1,4 @@
-/*using Content.Shared.Chemistry.Components;
+using Content.Shared.Chemistry.Components;
 using Content.Shared.Chemistry.Biopress;
 using Content.Shared.FixedPoint;
 using Robust.Shared.Serialization.TypeSerializers.Implementations.Custom.Prototype;
@@ -17,4 +17,4 @@ namespace Content.Server.Chemistry.Components
         [ViewVariables(VVAccess.ReadWrite)]
         public FixedPoint2 TotalReagentUnits;
     }
-}*/
+}
