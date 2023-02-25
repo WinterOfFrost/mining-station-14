@@ -13,7 +13,7 @@ namespace Content.Server.Chemistry.Components
         public readonly string? BioReagentGroupId;
 
         //total reagent units
-        [DataField("totalReagentUnits")]
+        [DataField("totalReagentUnits")] //TODO change name to something more like "proportions"
         [ViewVariables(VVAccess.ReadWrite)]
         public FixedPoint2 TotalReagentUnits;
     }

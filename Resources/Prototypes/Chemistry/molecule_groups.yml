@@ -8,6 +8,18 @@
     Oxygen: 0.33
 
 - type: moleculeGroup
+  id: CarbonDioxide
+  reagentProportions:
+    Oxygen: 0.66
+    Carbon: 0.33
+
+- type: moleculeGroup
+  id: NitrousOxide
+  reagentProportions:
+    Nitrogen: 0.66
+    Oxygen: 0.33   
+
+- type: moleculeGroup
   id: Ethanol
   reagentProportions:
     Hydrogen: 0.66

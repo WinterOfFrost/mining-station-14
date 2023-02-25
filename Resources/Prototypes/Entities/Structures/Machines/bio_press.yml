@@ -2,7 +2,7 @@
   parent: [ BaseMachinePowered, ConstructibleMachine ]
   id: BioPress
   name: Bio Press
-  description: A bioprocessing unit that will render any and all biological entities in to their base chemical elements.
+  description: A bioprocessing unit that will render any and all organic entities in to their base chemical elements.
   components:
   - type: Icon
     sprite: Structures/Machines/biopress.rsi

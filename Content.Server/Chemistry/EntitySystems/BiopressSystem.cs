@@ -11,6 +11,7 @@ using Content.Shared.Chemistry.Components;
 using Content.Shared.Containers.ItemSlots;
 using Content.Shared.Chemistry.Reagent;
 using Content.Shared.Chemistry.Reaction;
+using Content.Shared.Chemistry.Biopress;
 using Content.Shared.FixedPoint;
 using JetBrains.Annotations;
 using Robust.Server.GameObjects;
@@ -270,6 +271,102 @@ namespace Content.Server.Chemistry.EntitySystems
         }
 
         /// <summary>
+        ///     work similar to the centrifuge electrolysis, except that it keeps going until only base elements remains  
+        /// </summary>
+        private List<Solution.ReagentQuantity> BreakdownReagents(List<Solution.ReagentQuantity> reagents)
+        {
+            List<Solution.ReagentQuantity> tempList = new List<Solution.ReagentQuantity>();
+            List<Solution.ReagentQuantity> finalList = new List<Solution.ReagentQuantity>();
+
+            foreach (var reagent in (reagents))
+            {
+                if (_reactions.TryGetValue(reagent.ReagentId, out var productReactions)) //typically only one of these...
+                {
+                    foreach (var reaction in productReactions)
+                    {
+                        FixedPoint2 totalCoeff = 0f;
+                        foreach (var reactant in reaction.Reactants)
+                        {
+                            totalCoeff += reactant.Value.Amount;
+                        }
+                        foreach (var reactant in reaction.Reactants)
+                        {
+                            var name = reactant.Key;
+                            var coeff = reactant.Value.Amount;
+                            var amount = (reagent.Quantity / totalCoeff) * coeff;
+
+                            if (!reactant.Value.Catalyst)
+                            {
+                                Solution.ReagentQuantity newReagent = new Solution.ReagentQuantity(name,amount);
+                                tempList.Add(newReagent);
+                            }
+                        }
+                    }
+                }
+                else if (_prototypeManager.TryIndex(reagent.ReagentId, out ReagentPrototype? p) && _moleculeGroups.TryGetValue(p.MoleculeGroup, out var productMoleculeGroups))
+                {
+                    FixedPoint2 totalCoeff = 0f;
+                    foreach (var productMolecules in productMoleculeGroups)
+                    {
+                        if (productMolecules.ReagentProportions != null)
+                        {
+                            foreach (KeyValuePair<string, FixedPoint2> molecule in productMolecules.ReagentProportions)
+                            {
+                                totalCoeff += molecule.Value;
+                            }
+                            foreach (KeyValuePair<string, FixedPoint2> molecule in productMolecules.ReagentProportions)
+                            {
+                                var name = molecule.Key;
+                                var coeff = molecule.Value;
+                                var amount = (reagent.Quantity / totalCoeff) * coeff;
+
+                                Solution.ReagentQuantity newReagent = new Solution.ReagentQuantity(name, amount);
+                                tempList.Add(newReagent);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    finalList.Add(reagent);
+                }
+            }
+
+            if (tempList.Count > 0)
+                finalList.AddRange(BreakdownReagents(tempList));
+
+            return finalList;
+        }
+
+        /// <summary>
+        ///     Check entities for bio harvest component
+        ///     Get all reagents from prototype multiplied by totalReagentUnits
+        /// </summary>
+        private List<Solution.ReagentQuantity> RunBioHarvest(List<EntityUid> entities) {
+
+            List<Solution.ReagentQuantity> reagentList = new List<Solution.ReagentQuantity>();
+
+            foreach (var uid in entities)
+            {
+                if (TryComp(uid, out BiopressHarvestComponent? biopressHarvest) && biopressHarvest.BioReagentGroupId != null)
+                {
+                    if(_prototypeManager.TryIndex(biopressHarvest.BioReagentGroupId, out BioReagentGroupPrototype? group) && group.ReagentProportions != null)
+                    {
+                        foreach (KeyValuePair<string, FixedPoint2> reagent in group.ReagentProportions)
+                        {
+                            Solution.ReagentQuantity newReagent = new Solution.ReagentQuantity(reagent.Key, reagent.Value*biopressHarvest.TotalReagentUnits);
+                            reagentList.Add(newReagent);
+                        }
+                    }
+                }
+            }
+
+            reagentList = BreakdownReagents(reagentList);
+
+            return reagentList;
+        }
+
+        /// <summary>
         ///     Get all entities in container
         ///     Get all entities in containers that are also in this container EXCEPT if the container is ALIVE
         ///     (or if live-able and does NOT have the BiopressHarvest component)    
@@ -368,10 +465,18 @@ namespace Content.Server.Chemistry.EntitySystems
         private void HandleSmallMatter(EntityUid uid, BiopressComponent biopress) {
             biopress.ProcessingTimer = 0;
             biopress.Stage = BiopressStage.SmallMatter;
+
+            if (!_solutionContainerSystem.TryGetSolution(uid, SharedBiopress.BufferSolutionName, out var bufferSolution))
+            {
+                biopress.Stage = BiopressStage.Final;
+                return;
+            }
+
             SoundSystem.Play(biopress.GrindSound.GetSound(), Filter.Pvs(uid), uid, AudioParams.Default);
 
             List<EntityUid> entityList = new List<EntityUid>();
             List<Solution.ReagentQuantity> reagentList = new List<Solution.ReagentQuantity>();
+            List<Solution.ReagentQuantity> finalReagentList = new List<Solution.ReagentQuantity>();
             List<EntityUid> moveList = new List<EntityUid>();
 
             //Check for entity storage
@@ -417,14 +522,43 @@ namespace Content.Server.Chemistry.EntitySystems
                 reagentList.AddRange(entityTuple.Item2);
             }
 
-            //now we get all reagents and render them to their base elements (with another recursive function)
+            //get all reagents and render them to their base elements (with another recursive function)
+            finalReagentList.AddRange(BreakdownReagents(reagentList));
 
-            //then we convert all entities with the biopressHarvest component in to their constituent reagents
+            //convert all entities with the biopressHarvest component in to their constituent reagents
+            finalReagentList.AddRange(RunBioHarvest(entityList));
 
-            //TODO convert non-organics in to "assorted junk"
+            //remove all biopressHarvest entities
+            //remove all non-organic entities
+            //replace non-organics in to junk
+            foreach (var entityUid in entityList)
+            {
+                //skip if living mob
+                if (TryComp(entityUid, out MobStateComponent? mobState))
+                    if (mobState.CurrentState != MobState.Dead)
+                        continue;
 
-            //those reagents are added to the buffer
+                if (!TryComp(entityUid, out BiopressHarvestComponent? biopressHarvest))
+                {
+                    if (TryComp(entityUid, out TransformComponent? transform))
+                    {
+                        var coordinates = Transform(entityUid).Coordinates;
+                        //spawn junk
+                        var ent = EntityManager.SpawnEntity("junk", coordinates); //TODO make junk a component var 
+                        _entityStorageSystem.Insert(ent, uid);
+                    }
+                }
 
+                EntityManager.DeleteEntity(entityUid);
+            }
+
+            //reagents are added to the buffer
+            foreach (var reagent in finalReagentList)
+            {
+                bufferSolution.AddReagent(reagent.ReagentId, reagent.Quantity);
+            }
+
+            UpdateUiState(biopress);
         }
 
         /// <summary>
@@ -488,7 +622,6 @@ namespace Content.Server.Chemistry.EntitySystems
                         if (TryComp(entityUid, out DestructibleComponent? destructible) && !TryComp(entityUid, out BiopressHarvestComponent? biopressHarvest))
                             return true;
                     }
-
                 }
             }
 
@@ -496,12 +629,42 @@ namespace Content.Server.Chemistry.EntitySystems
         }
 
         /// <summary>
-        ///     Remove remaining entities, add n ashes to hopper for each entity
+        ///     Remove remaining entities, add ashes to hopper for each junk * AshFactor rounded
         /// </summary> 
         private void FinalStage(EntityUid uid, BiopressComponent biopress) {
             biopress.ProcessingTimer = 0;
             biopress.Stage = BiopressStage.Final;
             SoundSystem.Play(biopress.IncinerateSound.GetSound(), Filter.Pvs(uid), uid, AudioParams.Default);
+
+            List<EntityUid> entityList = new List<EntityUid>();
+
+            if (TryComp(uid, out EntityStorageComponent? container))
+            {
+                //iterate through container items (using recursion to find contained containers)
+                var containedEntities = container.Contents.ContainedEntities;
+                foreach (var entityUid in containedEntities)
+                {
+                    entityList.Add(entityUid);
+                }
+            } else
+                return;
+
+            foreach (var entityUid in entityList)
+            {
+                //remove junk
+                EntityManager.DeleteEntity(entityUid);
+            }
+
+            var numAshes = Math.Ceiling(entityList.Count * biopress.AshFactor);
+
+            for (var i = 0; i < numAshes; i++)
+            {
+                //add ashes
+                var coordinates = Transform(uid).Coordinates;
+                var ent = EntityManager.SpawnEntity("Ash", coordinates); //TODO make ashes a component var?
+                _entityStorageSystem.Insert(ent, uid);
+            }
+
         }
 
         private void OnPowerChange(EntityUid uid, BiopressComponent component, ref PowerChangedEvent args)
@@ -524,8 +687,6 @@ namespace Content.Server.Chemistry.EntitySystems
 
         private void UpdateUiState(BiopressComponent Biopress)
         {
-            if (Biopress.Active)
-                return;
 
             if (!_solutionContainerSystem.TryGetSolution(Biopress.Owner, SharedBiopress.BufferSolutionName, out var bufferSolution))
                 return;

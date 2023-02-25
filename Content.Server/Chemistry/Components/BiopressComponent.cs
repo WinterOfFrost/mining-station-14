@@ -45,5 +45,8 @@ namespace Content.Server.Chemistry.Components
         [DataField("largeDamage", required: true)]
         [ViewVariables(VVAccess.ReadWrite)]
         public DamageSpecifier LargeDamage = default!;
+
+        //how much ash to produce per junk (rounded)
+        public float AshFactor = 0.1F;
     }
 }
