@@ -23,7 +23,7 @@
   id: Vitamin #Anything "healthy"
   name: reagent-name-vitamin
   group: Foods
-  moleculeGroup: Nutriment # for now...
+  moleculeGroup: Vitamin
   desc: reagent-desc-vitamin
   physicalDesc: reagent-physical-desc-chalky
   flavor: vitamin
@@ -47,7 +47,7 @@
   id: Protein #Meat and beans
   name: reagent-name-protein
   group: Foods
-  moleculeGroup: Nutriment # for now...
+  moleculeGroup: Protein
   desc: reagent-desc-protein
   physicalDesc: reagent-physical-desc-clumpy
   flavor: protein
