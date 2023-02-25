@@ -542,8 +542,12 @@ namespace Content.Server.Chemistry.EntitySystems
             {
                 //skip if living mob
                 if (TryComp(entityUid, out MobStateComponent? mobState))
+                {
+                    if (!TryComp(entityUid, out BiopressHarvestComponent? biopressHarvestCheck))
+                        continue;
                     if (mobState.CurrentState != MobState.Dead)
                         continue;
+                }
 
                 if (!TryComp(entityUid, out BiopressHarvestComponent? biopressHarvest))
                 {
