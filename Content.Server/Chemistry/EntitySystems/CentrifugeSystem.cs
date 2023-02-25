@@ -327,9 +327,12 @@ namespace Content.Server.Chemistry.EntitySystems
                                     var coeff = reactant.Value.Amount;
                                     var amount = (reagent.Quantity / totalCoeff) * coeff;
 
-                                    if (!reactant.Value.Catalyst)
+                                    if (amount > 0.01)
                                     {
-                                        bufferSolution.AddReagent(name, amount);
+                                        if (!reactant.Value.Catalyst)
+                                        {
+                                            bufferSolution.AddReagent(name, amount);
+                                        }
                                     }
                                 }
                             }
@@ -338,9 +341,10 @@ namespace Content.Server.Chemistry.EntitySystems
                         else if (_prototypeManager.TryIndex(reagent.ReagentId, out ReagentPrototype? p) && _moleculeGroups.TryGetValue(p.MoleculeGroup, out var productMoleculeGroups))
                         {
                             DiscardReagents(component, reagent.ReagentId, reagent.Quantity, SharedCentrifuge.InputSlotName, false);
-                            FixedPoint2 totalCoeff = 0f;
+                            
                             foreach (var productMolecules in productMoleculeGroups)
                             {
+                                FixedPoint2 totalCoeff = 0f;
                                 if (productMolecules.ReagentProportions != null) {
                                     foreach (KeyValuePair<string, FixedPoint2> molecule in productMolecules.ReagentProportions)
                                     {

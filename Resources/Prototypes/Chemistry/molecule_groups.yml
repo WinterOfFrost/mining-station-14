@@ -20,6 +20,12 @@
     Oxygen: 0.33   
 
 - type: moleculeGroup
+  id: WeldingFuel
+  reagentProportions:
+    Carbon: 0.5
+    Hydrogen: 0.5  
+
+- type: moleculeGroup
   id: Ethanol
   reagentProportions:
     Hydrogen: 0.66

@@ -305,9 +305,10 @@ namespace Content.Server.Chemistry.EntitySystems
                 }
                 else if (_prototypeManager.TryIndex(reagent.ReagentId, out ReagentPrototype? p) && _moleculeGroups.TryGetValue(p.MoleculeGroup, out var productMoleculeGroups))
                 {
-                    FixedPoint2 totalCoeff = 0f;
+                    
                     foreach (var productMolecules in productMoleculeGroups)
                     {
+                        FixedPoint2 totalCoeff = 0f;
                         if (productMolecules.ReagentProportions != null)
                         {
                             foreach (KeyValuePair<string, FixedPoint2> molecule in productMolecules.ReagentProportions)
@@ -319,9 +320,12 @@ namespace Content.Server.Chemistry.EntitySystems
                                 var name = molecule.Key;
                                 var coeff = molecule.Value;
                                 var amount = (reagent.Quantity / totalCoeff) * coeff;
-
                                 Solution.ReagentQuantity newReagent = new Solution.ReagentQuantity(name, amount);
-                                tempList.Add(newReagent);
+
+                                if (amount > 0.01) //having issues with infinite loops, placing an acceptance limit
+                                {
+                                    tempList.Add(newReagent);
+                                }
                             }
                         }
                     }
@@ -350,12 +354,15 @@ namespace Content.Server.Chemistry.EntitySystems
             {
                 if (TryComp(uid, out BiopressHarvestComponent? biopressHarvest) && biopressHarvest.BioReagentGroupId != null)
                 {
-                    if(_prototypeManager.TryIndex(biopressHarvest.BioReagentGroupId, out BioReagentGroupPrototype? group) && group.ReagentProportions != null)
+                    if (!(TryComp(uid, out MobStateComponent? mobState) && mobState.CurrentState != MobState.Dead))
                     {
-                        foreach (KeyValuePair<string, FixedPoint2> reagent in group.ReagentProportions)
+                        if (_prototypeManager.TryIndex(biopressHarvest.BioReagentGroupId, out BioReagentGroupPrototype? group) && group.ReagentProportions != null)
                         {
-                            Solution.ReagentQuantity newReagent = new Solution.ReagentQuantity(reagent.Key, reagent.Value*biopressHarvest.TotalReagentUnits);
-                            reagentList.Add(newReagent);
+                            foreach (KeyValuePair<string, FixedPoint2> reagent in group.ReagentProportions)
+                            {
+                                Solution.ReagentQuantity newReagent = new Solution.ReagentQuantity(reagent.Key, reagent.Value * biopressHarvest.TotalReagentUnits);
+                                reagentList.Add(newReagent);
+                            }
                         }
                     }
                 }
@@ -381,7 +388,7 @@ namespace Content.Server.Chemistry.EntitySystems
             if (TryComp(uid, out MobStateComponent? mobState))
             {
                 //then check if it is alive or not
-                if (mobState.CurrentState == MobState.Dead)
+                if (mobState.CurrentState != MobState.Dead)
                     return Tuple.Create(entityList, reagentList,moveList);
                 //if it can live but is dead, check if it has the BiopressHarvest component (if it does, continue)
                 else if (!TryComp(uid, out BiopressHarvestComponent? biopressHarvest))
@@ -542,10 +549,10 @@ namespace Content.Server.Chemistry.EntitySystems
                 {
                     if (TryComp(entityUid, out TransformComponent? transform))
                     {
-                        var coordinates = Transform(entityUid).Coordinates;
-                        //spawn junk
-                        var ent = EntityManager.SpawnEntity("junk", coordinates); //TODO make junk a component var 
-                        _entityStorageSystem.Insert(ent, uid);
+                            var coordinates = Transform(entityUid).Coordinates;
+                            //spawn junk
+                            var ent = EntityManager.SpawnEntity("junk", coordinates); //TODO make junk a component var 
+                            _entityStorageSystem.Insert(ent, uid);    
                     }
                 }
 
@@ -655,13 +662,13 @@ namespace Content.Server.Chemistry.EntitySystems
                 EntityManager.DeleteEntity(entityUid);
             }
 
-            var numAshes = Math.Ceiling(entityList.Count * biopress.AshFactor);
+            var numAshes = Math.Floor(entityList.Count * biopress.AshFactor); //floor to prevent infinite ashes (unless 1 or above)
 
             for (var i = 0; i < numAshes; i++)
             {
                 //add ashes
                 var coordinates = Transform(uid).Coordinates;
-                var ent = EntityManager.SpawnEntity("Ash", coordinates); //TODO make ashes a component var?
+                var ent = EntityManager.SpawnEntity("Ash", coordinates);
                 _entityStorageSystem.Insert(ent, uid);
             }
 
