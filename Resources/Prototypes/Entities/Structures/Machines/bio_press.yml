@@ -54,6 +54,7 @@
           - FitsInDispenser
           tags:
           - Bottle
+          - ChemJug
   - type: ContainerContainer
     containers:
       beakerSlot: !type:ContainerSlot
