@@ -592,7 +592,7 @@ namespace Content.Server.Chemistry.EntitySystems
                 }
                 foreach (var entityUid in entityList)
                 {
-                    _damageableSystem.TryChangeDamage(entityUid, biopress.LargeDamage, ignoreResistances: false);
+                    _damageableSystem.TryChangeDamage(entityUid, biopress.LargeDamage, ignoreResistances: false, unblockable: true);
                 }
             }
         }
