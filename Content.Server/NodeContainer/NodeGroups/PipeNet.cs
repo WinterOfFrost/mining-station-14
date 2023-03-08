@@ -3,6 +3,7 @@ using Content.Server.Atmos;
 using Content.Server.Atmos.EntitySystems;
 using Content.Server.NodeContainer.Nodes;
 using Content.Shared.Atmos;
+using Content.Shared.Chemistry.Components;
 using Robust.Shared.Utility;
 
 namespace Content.Server.NodeContainer.NodeGroups
@@ -19,6 +20,10 @@ namespace Content.Server.NodeContainer.NodeGroups
     public sealed class PipeNet : BaseNodeGroup, IPipeNet
     {
         [ViewVariables] public GasMixture Air { get; set; } = new() {Temperature = Atmospherics.T20C};
+
+        [ViewVariables] private float TotalVolume; //< Total physical volume containable in all the pipes
+
+        [ViewVariables] public Solution Liquids { get; set; } = new();
 
         [ViewVariables] private AtmosphereSystem? _atmosphereSystem;
 
@@ -42,6 +47,35 @@ namespace Content.Server.NodeContainer.NodeGroups
 
         public void Update()
         {
+            // Vaporize/condense gases. Assume that everything in the pipe instantly reaches
+            // thermal equilibrium, i.e. gas temperature always equals liquid temperature.
+            // This loop employs a continuation method to converge to the right final
+            // temperature and gas/liquid balance. Math is required to understand it.
+            float lastAirT;
+            const int maxiter = 10;
+            const float reltol = 5e-2f;
+            for (int i = 0; i < maxiter; i++)
+            {
+                float alpha = 1 - 1/maxiter; // 1, 0.9, 0.8...
+                lastAirT = Air.Temperature;
+                float Hgas = _atmosphereSystem.GetHeatCapacity(Air);
+                float Qgas = Hgas * Air.Temperature;
+                float Hliquid = 0; // TODO
+                float Qliquid = Hliquid * Liquids.Temperature;
+                float Tfinal = (Qgas + Qliquid) / (Hgas + Hliquid);
+                Air.Temperature = Tfinal;
+                Liquids.Temperature = Tfinal;
+                // TODO: Boil liquids
+                // foreach (liquid in liquids) => convert to gas if T > tboil
+                //   important: make sure to only convert alpha fraction of the liquid
+                // TODO: Condense gases
+                // foreach (gas in gases) => convert to liquid if T < tboil
+                //   important: make sure to only convert alpha fraction of the gas
+                if (MathF.Abs(Tfinal - lastAirT)/lastAirT < reltol)
+                    break;
+            }
+            Air.Volume = TotalVolume - (float)Liquids.Volume;
+
             _atmosphereSystem?.React(Air, this);
         }
 
@@ -52,7 +86,7 @@ namespace Content.Server.NodeContainer.NodeGroups
             foreach (var node in groupNodes)
             {
                 var pipeNode = (PipeNode) node;
-                Air.Volume += pipeNode.Volume;
+                TotalVolume += pipeNode.Volume;
             }
         }
 
@@ -66,7 +100,7 @@ namespace Content.Server.NodeContainer.NodeGroups
                 return;
 
             Air.Multiply(1f - pipe.Volume / Air.Volume);
-            Air.Volume -= pipe.Volume;
+            TotalVolume -= pipe.Volume;
         }
 
         public override void AfterRemake(IEnumerable<IGrouping<INodeGroup?, Node>> newGroups)
