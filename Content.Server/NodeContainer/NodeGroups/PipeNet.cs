@@ -23,7 +23,7 @@ namespace Content.Server.NodeContainer.NodeGroups
     {
         [ViewVariables] public GasMixture Air { get; set; } = new() {Temperature = Atmospherics.T20C};
 
-        [ViewVariables] private float TotalVolume; //< Total physical volume containable in all the pipes
+        [ViewVariables] private float TotalVolume = 0f; //< Total physical volume containable in all the pipes
 
         [ViewVariables] public Solution Liquids { get; set; } = new();
 
@@ -64,28 +64,34 @@ namespace Content.Server.NodeContainer.NodeGroups
                 lastAirT = Air.Temperature;
                 float Hgas = _atmosphereSystem.GetHeatCapacity(Air);
                 float Qgas = Hgas * Air.Temperature;
-                float Hliquid = 0; // TODO
+                float Hliquid = Liquids.GetHeatCapacity(_protoMan);
                 float Qliquid = Hliquid * Liquids.Temperature;
                 float Tfinal = (Qgas + Qliquid) / (Hgas + Hliquid);
                 Air.Temperature = Tfinal;
                 Liquids.Temperature = Tfinal;
                 for (int i = 0; i < Atmospherics.TotalNumberOfGases; i++)
                 {
+                    const float uPerG = 5f; // FIXME: assume 5u per gram (1 g/mL, 1u=5 mL)
                     var gasProto = _atmosphereSystem.GetGas(i);
                     if (!_protoMan.TryIndex(gasProto.Reagent, out ReagentPrototype? liquidProto))
                         continue;
-                    if (Tfinal < liquidProto.BoilingPoint)
+                    if (Tfinal < liquidProto.BoilingPoint + Atmospherics.T0C)
                     {
                         // Condense gases
                         float moles = Air.GetMoles(i);
                         float adjMoles = moles * alpha;
                         Air.SetMoles(i, moles - adjMoles);
-                        var qty = adjMoles * gasProto.MolarMass * 5f; // FIXME: assume 5u per gram (1 g/mL, 1u=5 mL)
+                        var qty = adjMoles * gasProto.MolarMass * uPerG;
                         Liquids.AddReagent(gasProto.Reagent, qty);
                     }
                     else
                     {
                         // Boil liquids
+                        float qty = (float)Liquids.GetReagentQuantity(gasProto.Reagent);
+                        float adjQty = qty * alpha;
+                        Liquids.RemoveReagent(gasProto.Reagent, adjQty);
+                        float moles = adjQty / uPerG / gasProto.MolarMass;
+                        Air.AdjustMoles(i, moles);
                     }
                 }
                 if (MathF.Abs(Tfinal - lastAirT)/lastAirT < reltol)
@@ -104,6 +110,7 @@ namespace Content.Server.NodeContainer.NodeGroups
             {
                 var pipeNode = (PipeNode) node;
                 TotalVolume += pipeNode.Volume;
+                Air.Volume = TotalVolume;
             }
         }
 
@@ -118,6 +125,7 @@ namespace Content.Server.NodeContainer.NodeGroups
 
             Air.Multiply(1f - pipe.Volume / Air.Volume);
             TotalVolume -= pipe.Volume;
+            Air.Volume = TotalVolume;
         }
 
         public override void AfterRemake(IEnumerable<IGrouping<INodeGroup?, Node>> newGroups)
