@@ -55,6 +55,7 @@ namespace Content.Server.NodeContainer.NodeGroups
             // thermal equilibrium, i.e. gas temperature always equals liquid temperature.
             // This loop employs a continuation method to converge to the right final
             // temperature and gas/liquid balance. Math is required to understand it.
+            const float uPerG = 5f; // FIXME: assume 5u per gram (1 g/mL, 1u=5 mL)
             float lastAirT;
             const int maxiter = 10;
             const float reltol = 5e-2f;
@@ -71,7 +72,6 @@ namespace Content.Server.NodeContainer.NodeGroups
                 Liquids.Temperature = Tfinal;
                 for (int i = 0; i < Atmospherics.TotalNumberOfGases; i++)
                 {
-                    const float uPerG = 5f; // FIXME: assume 5u per gram (1 g/mL, 1u=5 mL)
                     var gasProto = _atmosphereSystem.GetGas(i);
                     if (!_protoMan.TryIndex(gasProto.Reagent, out ReagentPrototype? liquidProto))
                         continue;
@@ -97,7 +97,7 @@ namespace Content.Server.NodeContainer.NodeGroups
                 if (MathF.Abs(Tfinal - lastAirT)/lastAirT < reltol)
                     break;
             }
-            Air.Volume = TotalVolume - (float)Liquids.Volume;
+            Air.Volume = TotalVolume - (float)Liquids.Volume/1000*uPerG;
 
             _atmosphereSystem?.React(Air, this);
         }
