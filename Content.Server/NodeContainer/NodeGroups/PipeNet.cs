@@ -4,6 +4,8 @@ using Content.Server.Atmos.EntitySystems;
 using Content.Server.NodeContainer.Nodes;
 using Content.Shared.Atmos;
 using Content.Shared.Chemistry.Components;
+using Content.Shared.Chemistry.Reagent;
+using Robust.Shared.Prototypes;
 using Robust.Shared.Utility;
 
 namespace Content.Server.NodeContainer.NodeGroups
@@ -26,6 +28,8 @@ namespace Content.Server.NodeContainer.NodeGroups
         [ViewVariables] public Solution Liquids { get; set; } = new();
 
         [ViewVariables] private AtmosphereSystem? _atmosphereSystem;
+
+        [Dependency] private readonly IPrototypeManager _protoMan = default!;
 
         public EntityUid? Grid { get; private set; }
 
@@ -54,9 +58,9 @@ namespace Content.Server.NodeContainer.NodeGroups
             float lastAirT;
             const int maxiter = 10;
             const float reltol = 5e-2f;
-            for (int i = 0; i < maxiter; i++)
+            for (int iter = 0; iter < maxiter; iter++)
             {
-                float alpha = 1 - 1/maxiter; // 1, 0.9, 0.8...
+                float alpha = 1 - 1f*iter/maxiter; // 1, 0.9, 0.8...
                 lastAirT = Air.Temperature;
                 float Hgas = _atmosphereSystem.GetHeatCapacity(Air);
                 float Qgas = Hgas * Air.Temperature;
@@ -65,12 +69,25 @@ namespace Content.Server.NodeContainer.NodeGroups
                 float Tfinal = (Qgas + Qliquid) / (Hgas + Hliquid);
                 Air.Temperature = Tfinal;
                 Liquids.Temperature = Tfinal;
-                // TODO: Boil liquids
-                // foreach (liquid in liquids) => convert to gas if T > tboil
-                //   important: make sure to only convert alpha fraction of the liquid
-                // TODO: Condense gases
-                // foreach (gas in gases) => convert to liquid if T < tboil
-                //   important: make sure to only convert alpha fraction of the gas
+                for (int i = 0; i < Atmospherics.TotalNumberOfGases; i++)
+                {
+                    var gasProto = _atmosphereSystem.GetGas(i);
+                    if (!_protoMan.TryIndex(gasProto.Reagent, out ReagentPrototype? liquidProto))
+                        continue;
+                    if (Tfinal < liquidProto.BoilingPoint)
+                    {
+                        // Condense gases
+                        float moles = Air.GetMoles(i);
+                        float adjMoles = moles * alpha;
+                        Air.SetMoles(i, moles - adjMoles);
+                        var qty = adjMoles * gasProto.MolarMass * 5f; // FIXME: assume 5u per gram (1 g/mL, 1u=5 mL)
+                        Liquids.AddReagent(gasProto.Reagent, qty);
+                    }
+                    else
+                    {
+                        // Boil liquids
+                    }
+                }
                 if (MathF.Abs(Tfinal - lastAirT)/lastAirT < reltol)
                     break;
             }
