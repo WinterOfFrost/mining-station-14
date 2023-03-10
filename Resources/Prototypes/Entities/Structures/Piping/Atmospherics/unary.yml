@@ -221,6 +221,35 @@
 
 - type: entity
   parent: [ BaseMachinePowered, ConstructibleMachine ]
+  id: ReagentPump
+  name: Gas Pipe Reagent Pump
+  description: A specialised pump design to extract or inject condensed chemical reagents in to a gas pipe network.
+  abstract: true
+  placement:
+    mode: SnapgridCenter
+  components:
+    - type: Sprite
+      netsync: false
+      sprite: Structures/Piping/Atmospherics/thermomachine.rsi
+      noRot: true
+    - type: Appearance
+    - type: PipeColorVisuals
+    - type: Rotatable
+    - type: AtmosPipeColor
+    - type: AtmosDevice
+    - type: NodeContainer
+      nodes:
+        pipe:
+          !type:PipeNode
+          nodeGroupID: Pipe
+          pipeDirection: South
+    - type: StaticPrice
+      price: 500
+    - type: Transform
+      noRot: false
+
+- type: entity
+  parent: [ BaseMachinePowered, ConstructibleMachine ]
   id: BaseGasThermoMachine
   name: thermomachine
   abstract: true
