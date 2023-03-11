@@ -230,8 +230,12 @@
   components:
     - type: Sprite
       netsync: false
-      sprite: Structures/Piping/Atmospherics/thermomachine.rsi
+      sprite: Structures/Piping/Atmospherics/reagent_pump.rsi
       noRot: true
+      layers:
+        - state: base
+        - state: pipe
+          map: [ "enum.PipeVisualLayers.Pipe" ]
     - type: Appearance
     - type: PipeColorVisuals
     - type: Rotatable
