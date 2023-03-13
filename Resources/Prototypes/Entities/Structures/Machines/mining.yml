@@ -90,3 +90,63 @@
     containers:
       storagebase: !type:Container
         ents: []
+
+- type: entity
+  id: AirJet
+  parent: BaseMachinePowered
+  name: air jet
+  description: Moves object using compressed air.
+  components:
+  - type: Sprite
+    noRot: true
+    sprite: Structures/Machines/Anomaly/ape.rsi
+    layers:
+    - state: base
+    - state: unshaded
+      shader: unshaded
+      map: ["enum.PowerDeviceVisualLayers.Powered"]
+    - state: panel
+      map: ["enum.WiresVisualLayers.MaintenancePanel"]
+    - state: firing
+      shader: unshaded
+      visible: false
+      map: ["enum.EmitterVisualLayers.Lights"]
+    - state: locked
+      shader: unshaded
+      visible: false
+      map: ["enum.StorageVisualLayers.Lock"]
+    - sprite: Structures/Piping/Atmospherics/pipe.rsi
+      state: pipeHalf
+      map: [ "enum.PipeVisualLayers.Pipe" ]
+  - type: Transform
+    noRot: false
+  - type: Fixtures
+    fixtures:
+    - shape:
+        !type:PhysShapeCircle
+        radius: 0.35
+      density: 25
+      mask:
+      - MachineMask
+      layer:
+      - MachineLayer
+  - type: Rotatable
+    rotateWhileAnchored: true
+  - type: ApcPowerReceiver
+    powerLoad: 10
+  - type: Appearance
+  - type: GenericVisualizer
+    visuals:
+      enum.PowerDeviceVisuals.Powered:
+        enum.PowerDeviceVisualLayers.Powered:
+          True: { visible: true }
+          False: { visible: false }
+  - type: PipeColorVisuals
+  - type: AtmosPipeColor
+  - type: NodeContainer
+    nodes:
+      pipe:
+        !type:PipeNode
+        nodeGroupID: Pipe
+        pipeDirection: South
+  - type: AirJet
