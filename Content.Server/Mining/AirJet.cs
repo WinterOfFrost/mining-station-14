@@ -18,7 +18,7 @@ public class AirJetComponent : Component
 
     [DataField("force")]
     [ViewVariables(VVAccess.ReadWrite)]
-    public float Force = 50f;
+    public float Force = 60f;
 
     [DataField("targetDist")]
     [ViewVariables(VVAccess.ReadWrite)]

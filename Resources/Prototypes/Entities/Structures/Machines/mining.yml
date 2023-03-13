@@ -14,7 +14,7 @@
   - type: ApcPowerReceiver
     powerLoad: 2500
   - type: Electromagnet
-    force: 200.0
+    force: 850.0
     minDist: 0.9
     range: 2.0
 
