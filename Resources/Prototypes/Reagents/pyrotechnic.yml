@@ -109,6 +109,16 @@
         multiplier: 0.2
       - !type:AdjustTemperature
         amount: 6000
+    Gas:
+      effects:
+      - !type:HealthChange
+        damage:
+          types:
+            Heat: 1
+      - !type:FlammableReaction
+        multiplier: 0.2
+      - !type:AdjustTemperature
+        amount: 6000
   reactiveEffects:
     Flammable:
       methods: [ Touch ]
