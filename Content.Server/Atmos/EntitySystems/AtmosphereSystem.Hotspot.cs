@@ -100,6 +100,7 @@ namespace Content.Server.Atmos.EntitySystems
                 return;
 
             var oxygen = tile.Air.GetMoles(Gas.Oxygen);
+            var nitrogen = tile.Air.GetMoles(Gas.Nitrogen);
 
             if (oxygen < 0.5f)
                 return;
@@ -125,7 +126,7 @@ namespace Content.Server.Atmos.EntitySystems
                 return;
             }
 
-            if ((exposedTemperature > Atmospherics.PlasmaMinimumBurnTemperature) && (plasma > 0.5f || tritium > 0.5f || hydrogen > 0.5f) || clf3 > 0.5f)
+            if ((exposedTemperature > Atmospherics.PlasmaMinimumBurnTemperature) && (plasma > 0.5f || tritium > 0.5f || hydrogen > 0.5f) || (clf3 > 0.5f && clf3 > (nitrogen/ Atmospherics.CLF3NitrogenRetardantFactor)))
             {
                 tile.Hotspot = new Hotspot
                 {

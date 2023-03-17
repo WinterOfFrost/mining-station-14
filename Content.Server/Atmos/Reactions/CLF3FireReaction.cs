@@ -22,12 +22,12 @@ namespace Content.Server.Atmos.Reactions
             
 
             burnedFuel = initialCLF3 - (retardant/Atmospherics.CLF3NitrogenRetardantFactor);
-            mixture.SetMoles(Gas.CLF3, mixture.GetMoles(Gas.CLF3) * (1 - 1 / Atmospherics.HydrogenBurnHydroFactor)); //use this for now
             energyReleased += (Atmospherics.FireHydrogenEnergyReleased * burnedFuel * (Atmospherics.HydrogenBurnHydroFactor - 1));
-            
 
             if (burnedFuel > 0)
             {
+                
+                mixture.SetMoles(Gas.CLF3, initialCLF3 * (1 - 1 / Atmospherics.HydrogenBurnHydroFactor)); //just using the hydro burn for now
                 energyReleased += (Atmospherics.FireHydrogenEnergyReleased * burnedFuel);
 
                 // Conservation of mass is important.
@@ -36,7 +36,11 @@ namespace Content.Server.Atmos.Reactions
                 mixture.ReactionResults[GasReaction.Fire] += burnedFuel;
             } else
             {
-                mixture.AdjustMoles(Gas.Oxygen, initialCLF3 * (1 - 1 / Atmospherics.HydrogenBurnHydroFactor));
+                //the nitrogen won't stop the reaction, but it will slow it down significantly
+                mixture.SetMoles(Gas.CLF3, initialCLF3 * (1 - 1 / (Atmospherics.HydrogenBurnHydroFactor*10000)));
+
+                // Conservation of mass is important.
+                mixture.AdjustMoles(Gas.Oxygen, initialCLF3 - (initialCLF3 * (1 - 1 / (Atmospherics.HydrogenBurnHydroFactor * 10000))));
             }
 
             if (energyReleased > 0)
