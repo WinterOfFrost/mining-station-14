@@ -30,15 +30,10 @@
   components:
   - type: Sprite
     netsync: false
-    sprite: Structures/Piping/disposal.rsi
+    sprite: Structures/Machines/hopper.rsi
     snapCardinals: true
     layers:
-    - state: condisposal
-      map: ["enum.DisposalUnitVisualLayers.Base"]
-    - state: dispover-handle
-      map: ["enum.DisposalUnitVisualLayers.Handle"]
-    - state: dispover-ready
-      map: ["enum.DisposalUnitVisualLayers.Light"]
+    - state: icon
   - type: Physics
     bodyType: Static
   - type: Fixtures
@@ -46,7 +41,6 @@
     - shape:
         !type:PhysShapeAabb
         bounds: "-0.25,-0.4,0.25,0.4"
-      density: 75
       mask:
       - MachineMask
       layer:
