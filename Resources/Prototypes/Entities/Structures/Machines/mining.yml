@@ -93,24 +93,14 @@
   components:
   - type: Sprite
     noRot: true
-    sprite: Structures/Machines/Anomaly/ape.rsi
+    sprite: Structures/Machines/air_jet.rsi
     layers:
     - state: base
-    - state: unshaded
-      shader: unshaded
-      map: ["enum.PowerDeviceVisualLayers.Powered"]
-    - state: panel
-      map: ["enum.WiresVisualLayers.MaintenancePanel"]
-    - state: firing
-      shader: unshaded
-      visible: false
-      map: ["enum.EmitterVisualLayers.Lights"]
-    - state: locked
-      shader: unshaded
-      visible: false
-      map: ["enum.StorageVisualLayers.Lock"]
+    #- state: unshaded
+    #  shader: unshaded
+    #  map: ["enum.PowerDeviceVisualLayers.Powered"]
     - sprite: Structures/Piping/Atmospherics/pipe.rsi
-      state: pipeHalf
+      state: pipeConnector
       map: [ "enum.PipeVisualLayers.Pipe" ]
   - type: Transform
     noRot: false

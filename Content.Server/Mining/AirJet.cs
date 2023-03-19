@@ -124,7 +124,9 @@ public class AirJetSystem : EntitySystem
 
             // Release gas
             var released = inlet.Air.RemoveVolume(comp.Volume);
-            _atmosphereSystem.Merge(environment, released);
+            if (environment != null) {
+                _atmosphereSystem.Merge(environment, released);
+            }
             _sharedAudioSystem.PlayPvs("/Audio/Items/hiss.ogg", comp.Owner);
         }
     }
