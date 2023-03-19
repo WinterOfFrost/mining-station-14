@@ -253,6 +253,32 @@
       price: 500
     - type: Transform
       noRot: false
+    - type: ActivatableUI
+      key: enum.ReagentPumpUiKey.Key
+    - type: ActivatableUIRequiresPower
+    - type: UserInterface
+      interfaces:
+      - key: enum.ReagentPumpUiKey.Key
+        type: ReagentPumpBoundUserInterface
+    - type: ApcPowerReceiver
+      powerLoad: 500
+    - type: ItemSlots
+      slots:
+        beakerSlot:
+          whitelist:
+            components:
+            - FitsInDispenser
+            tags:
+            - Bottle
+            - ChemJug
+    - type: ContainerContainer
+      containers:
+        beakerSlot: !type:ContainerSlot
+        machine_board: !type:Container
+        machine_parts: !type:Container
+    - type: SolutionContainerManager
+      solutions:
+        buffer: {}
 
 - type: entity
   parent: [ BaseMachinePowered, ConstructibleMachine ]
