@@ -227,6 +227,7 @@
   placement:
     mode: SnapgridCenter
   components:
+    - type: ReagentPump
     - type: Icon
       sprite: Structures/Piping/Atmospherics/reagent_pump.rsi
       state: icon
